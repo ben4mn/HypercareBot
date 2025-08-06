@@ -120,7 +120,7 @@ export default function DocumentUploader({ chatbotId, onUploadComplete }: Docume
         setFiles(files => 
           files.map(f => 
             f.id === fileWrapper.id 
-              ? { ...f, status: 'error', error: `Network error: ${error.message}` }
+              ? { ...f, status: 'error', error: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}` }
               : f
           )
         )
