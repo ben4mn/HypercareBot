@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: 'all', // Allow all hosts for production deployment
     proxy: {
       '/api': {
         target: 'http://backend:3050',

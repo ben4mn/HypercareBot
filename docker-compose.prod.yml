@@ -3,8 +3,7 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    ports:
-      - "5432:5432"
+    restart: unless-stopped
     environment:
       - POSTGRES_DB=hypercare
       - POSTGRES_USER=hypercare
@@ -21,15 +20,17 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "3051:5173"
     environment:
-      - VITE_API_URL=http://localhost:3050
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3050}
     depends_on:
       - backend
 
   backend:
     build: ./backend
+    restart: unless-stopped
     ports:
       - "3050:3050"
     volumes:
@@ -41,6 +42,7 @@ services:
       - PORT=3050
       - CHROMA_URL=http://chromadb:8000
       - NODE_ENV=production
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3051}
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,8 +51,7 @@ services:
 
   chromadb:
     image: chromadb/chroma:latest
-    ports:
-      - "3052:8000"
+    restart: unless-stopped
     volumes:
       - ./data/vectors:/chroma/chroma
     environment:
@@ -59,15 +60,16 @@ services:
 
   nginx:
     image: nginx:alpine
+    restart: unless-stopped
     ports:
-      - "3053:80"
+      - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro  # For SSL certificates
     depends_on:
       - frontend
       - backend
 
 volumes:
   postgres-data:
-  node_modules_frontend:
-  node_modules_backend:

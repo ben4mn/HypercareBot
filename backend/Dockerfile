@@ -2,9 +2,6 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install system dependencies for better-sqlite3
-RUN apk add --no-cache python3 make g++
-
 # Copy package files
 COPY package*.json ./
 
@@ -15,7 +12,7 @@ RUN npm install
 COPY . .
 
 # Create data directory
-RUN mkdir -p /data/database /data/uploads /data/vectors
+RUN mkdir -p /data/uploads
 
 # Expose port
 EXPOSE 3050
