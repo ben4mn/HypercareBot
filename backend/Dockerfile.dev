@@ -1,0 +1,26 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install basic dependencies
+RUN apk add --no-cache python3 make g++ sqlite
+
+# Copy package files
+COPY package.json ./
+
+# Install dependencies (skip optional ones that might fail)
+RUN npm install --no-optional
+
+# Copy source code
+COPY . .
+
+# Create data directories
+RUN mkdir -p /data/database /data/uploads
+
+# Use in-memory database for development
+ENV DATABASE_PATH=/app/dev.db
+ENV UPLOAD_PATH=/app/uploads
+
+EXPOSE 3050
+
+CMD ["npm", "start"]

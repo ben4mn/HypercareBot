@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "3050:3050"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./data:/data
+    environment:
+      - DATABASE_PATH=/data/database/hypercare.db
+      - UPLOAD_PATH=/data/uploads
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PORT=3050
+      - CHROMA_URL=http://chromadb:8000
+      - NODE_ENV=development
+    depends_on:
+      - chromadb
+    command: npm start
+    working_dir: /app
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3051:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:3050
+    depends_on:
+      - backend
+    command: npm run dev
+    working_dir: /app
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "3052:8000"
+    volumes:
+      - ./data/vectors:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma

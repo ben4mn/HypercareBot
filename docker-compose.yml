@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=hypercare
+      - POSTGRES_USER=hypercare
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hypercare_db_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hypercare"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3051:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:3050
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "3050:3050"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./data:/data
+    environment:
+      - DATABASE_URL=postgresql://hypercare:${POSTGRES_PASSWORD:-hypercare_db_password}@postgres:5432/hypercare
+      - UPLOAD_PATH=/data/uploads
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PORT=3050
+      - CHROMA_URL=http://chromadb:8000
+      - NODE_ENV=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    command: npm run dev
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "3052:8000"
+    volumes:
+      - ./data/vectors:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "3053:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres-data:
+  node_modules_frontend:
+  node_modules_backend:
