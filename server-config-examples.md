@@ -11,8 +11,8 @@ Create/edit: `/etc/apache2/sites-available/hypercare.zyroi.com.conf`
     ServerName hypercare.zyroi.com
     
     ProxyPreserveHost On
-    ProxyPass / http://127.0.0.1:8080/
-    ProxyPassReverse / http://127.0.0.1:8080/
+    ProxyPass / http://127.0.0.1:9876/
+    ProxyPassReverse / http://127.0.0.1:9876/
     
     # Enable proxy modules
     # a2enmod proxy
@@ -39,7 +39,7 @@ server {
     server_name hypercare.zyroi.com;
     
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:9876;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -66,7 +66,7 @@ sudo systemctl reload nginx
 ## Option 3: Temporary Direct Access
 
 While setting up the proxy, you can access your app directly:
-- `http://hypercare.zyroi.com:8080`
+- `http://hypercare.zyroi.com:9876`
 
 ## Option 4: Stop Existing Web Server (if not needed)
 
