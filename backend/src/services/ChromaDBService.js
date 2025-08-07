@@ -19,17 +19,36 @@ export class ChromaDBService {
     const collectionName = `chatbot_${chatbotId}`;
     
     try {
-      // Try to get existing collection
-      return await client.getCollection({ name: collectionName });
+      // Try to get existing collection first
+      const collections = await client.listCollections();
+      const exists = collections.some(col => col.name === collectionName);
+      
+      if (exists) {
+        logger.info(`✅ ChromaDB: Using existing collection: ${collectionName}`);
+        return await client.getCollection({ name: collectionName });
+      } else {
+        // Create new collection if it doesn't exist with null embedding function
+        // since we provide embeddings directly
+        logger.info(`📦 ChromaDB: Creating new collection: ${collectionName}`);
+        return await client.createCollection({ 
+          name: collectionName,
+          metadata: { chatbotId },
+          embeddingFunction: null // Explicitly null since we provide embeddings directly
+        });
+      }
     } catch (error) {
-      // Create new collection if it doesn't exist with null embedding function
-      // since we provide embeddings directly
-      logger.info(`Creating new ChromaDB collection: ${collectionName}`);
-      return await client.createCollection({ 
-        name: collectionName,
-        metadata: { chatbotId },
-        embeddingFunction: null // Explicitly null since we provide embeddings directly
-      });
+      logger.error(`❌ ChromaDB: Error getting/creating collection ${collectionName}:`, error);
+      // If there's an error, try to create or get collection
+      try {
+        return await client.getOrCreateCollection({ 
+          name: collectionName,
+          metadata: { chatbotId },
+          embeddingFunction: null
+        });
+      } catch (fallbackError) {
+        logger.error(`❌ ChromaDB: Fallback also failed:`, fallbackError);
+        throw fallbackError;
+      }
     }
   }
 
@@ -58,42 +77,58 @@ export class ChromaDBService {
   }
 
   static async searchSimilar(chatbotId, queryEmbedding, limit = 5) {
-    logger.info(`🔍 ChromaDB: Getting collection for chatbot ${chatbotId}`);
-    const collection = await this.getCollection(chatbotId);
+    logger.info(`🔍 ChromaDB: Searching for similar documents in chatbot ${chatbotId}`);
     
-    logger.info(`🔍 ChromaDB: Collection retrieved, querying with embedding length=${queryEmbedding.length}`);
-    
-    const results = await collection.query({
-      queryEmbeddings: [queryEmbedding],
-      nResults: limit
-    });
-    
-    logger.info(`📊 ChromaDB: Query results:`, {
-      documentsLength: results.documents?.length,
-      metadatasLength: results.metadatas?.length,
-      distancesLength: results.distances?.length,
-      hasDocuments: !!results.documents,
-      firstDocumentArray: results.documents?.[0]?.length
-    });
-    
-    if (!results.documents || results.documents.length === 0) {
-      logger.warn(`❌ ChromaDB: No documents found in results`);
+    try {
+      const collection = await this.getCollection(chatbotId);
+      
+      // Check if collection has any documents
+      const collectionCount = await collection.count();
+      logger.info(`📊 ChromaDB: Collection has ${collectionCount} total documents`);
+      
+      if (collectionCount === 0) {
+        logger.warn(`⚠️ ChromaDB: Collection ${chatbotId} is empty - no documents to search`);
+        return [];
+      }
+      
+      logger.info(`🔍 ChromaDB: Querying with embedding length=${queryEmbedding.length}, limit=${limit}`);
+      
+      const results = await collection.query({
+        queryEmbeddings: [queryEmbedding],
+        nResults: Math.min(limit, collectionCount) // Don't request more than available
+      });
+      
+      logger.info(`📊 ChromaDB: Query results:`, {
+        documentsLength: results.documents?.length,
+        metadatasLength: results.metadatas?.length,
+        distancesLength: results.distances?.length,
+        hasDocuments: !!results.documents,
+        firstDocumentArray: results.documents?.[0]?.length,
+        collectionCount: collectionCount
+      });
+      
+      if (!results.documents || results.documents.length === 0) {
+        logger.warn(`❌ ChromaDB: No documents found in results despite collection having ${collectionCount} documents`);
+        return [];
+      }
+      
+      if (!results.documents[0] || results.documents[0].length === 0) {
+        logger.warn(`❌ ChromaDB: First document array is empty despite collection having ${collectionCount} documents`);
+        return [];
+      }
+      
+      logger.info(`✅ ChromaDB: Found ${results.documents[0].length} similar document(s) out of ${collectionCount} total`);
+      
+      // Format results
+      return results.documents[0].map((doc, index) => ({
+        content: doc,
+        metadata: results.metadatas[0][index],
+        distance: results.distances[0][index]
+      }));
+    } catch (error) {
+      logger.error(`❌ ChromaDB: Error searching similar documents:`, error);
       return [];
     }
-    
-    if (!results.documents[0] || results.documents[0].length === 0) {
-      logger.warn(`❌ ChromaDB: First document array is empty`);
-      return [];
-    }
-    
-    logger.info(`✅ ChromaDB: Found ${results.documents[0].length} document(s) in collection`);
-    
-    // Format results
-    return results.documents[0].map((doc, index) => ({
-      content: doc,
-      metadata: results.metadatas[0][index],
-      distance: results.distances[0][index]
-    }));
   }
 
   static async deleteVectors(chatbotId, vectorIds) {

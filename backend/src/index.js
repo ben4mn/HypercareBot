@@ -185,6 +185,77 @@ const ChatbotService = {
       .replace(/-+/g, '-')
       .trim()
       + '-' + Date.now().toString(36);
+  },
+  
+  async activateChatbot(id) {
+    const db = getDb();
+    await db.prepare(`
+      UPDATE chatbots 
+      SET is_active = true
+      WHERE id = ?
+    `).run(id);
+    return await this.getChatbotById(id);
+  },
+
+  async deactivateChatbot(id) {
+    const db = getDb();
+    await db.prepare(`
+      UPDATE chatbots 
+      SET is_active = false
+      WHERE id = ?
+    `).run(id);
+    return await this.getChatbotById(id);
+  },
+  
+  async archiveChatbot(id) {
+    const db = getDb();
+    await db.prepare(`
+      UPDATE chatbots 
+      SET archived_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(id);
+  },
+  
+  async updateChatbot(id, data) {
+    const db = getDb();
+    const updates = [];
+    const values = [];
+    
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      values.push(data.name);
+    }
+    if (data.system_prompt !== undefined) {
+      updates.push('system_prompt = ?');
+      values.push(data.system_prompt);
+    }
+    if (data.welcome_message !== undefined) {
+      updates.push('welcome_message = ?');
+      values.push(data.welcome_message);
+    }
+    if (data.is_active !== undefined) {
+      updates.push('is_active = ?');
+      values.push(data.is_active);
+    }
+    if (data.config !== undefined) {
+      updates.push('config_json = ?::jsonb');
+      values.push(JSON.stringify(data.config));
+    }
+    
+    if (updates.length === 0) {
+      return await this.getChatbotById(id);
+    }
+    
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+    
+    await db.prepare(`
+      UPDATE chatbots 
+      SET ${updates.join(', ')} 
+      WHERE id = ?
+    `).run(...values);
+    
+    return await this.getChatbotById(id);
   }
 };
 
@@ -377,6 +448,61 @@ app.get('/api/admin/chatbots/:id', simpleAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'Chatbot not found' });
     }
     res.json(chatbot);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put('/api/admin/chatbots/:id', simpleAuth, async (req, res, next) => {
+  try {
+    const chatbot = await ChatbotService.updateChatbot(req.params.id, req.body);
+    if (!chatbot) {
+      return res.status(404).json({ error: 'Chatbot not found' });
+    }
+    res.json(chatbot);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Activate/Deactivate/Archive endpoints
+app.post('/api/admin/chatbots/:id/activate', simpleAuth, async (req, res, next) => {
+  try {
+    const chatbot = await ChatbotService.activateChatbot(req.params.id);
+    if (!chatbot) {
+      return res.status(404).json({ error: 'Chatbot not found' });
+    }
+    res.json(chatbot);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/chatbots/:id/deactivate', simpleAuth, async (req, res, next) => {
+  try {
+    const chatbot = await ChatbotService.deactivateChatbot(req.params.id);
+    if (!chatbot) {
+      return res.status(404).json({ error: 'Chatbot not found' });
+    }
+    res.json(chatbot);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/chatbots/:id/archive', simpleAuth, async (req, res, next) => {
+  try {
+    await ChatbotService.archiveChatbot(req.params.id);
+    res.json({ success: true, message: 'Chatbot archived successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/chatbots/:id', simpleAuth, async (req, res, next) => {
+  try {
+    await ChatbotService.archiveChatbot(req.params.id); // Soft delete
+    res.json({ success: true, message: 'Chatbot deleted successfully' });
   } catch (error) {
     next(error);
   }

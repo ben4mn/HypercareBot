@@ -14,21 +14,27 @@ interface Chatbot {
 }
 
 export default function ChatbotList() {
-  const { chatbots, loading, error, updateChatbot, deleteChatbot } = useChatbots()
+  const { chatbots, loading, error, updateChatbot, deleteChatbot, refetch } = useChatbots()
 
   const handleToggleActive = async (chatbot: Chatbot) => {
     try {
       const endpoint = chatbot.is_active ? 'deactivate' : 'activate'
-      await fetch(`/api/admin/chatbots/${chatbot.id}/${endpoint}`, {
+      const response = await fetch(`/api/admin/chatbots/${chatbot.id}/${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
         }
       })
       
-      await updateChatbot(chatbot.id, { is_active: !chatbot.is_active })
+      if (!response.ok) {
+        throw new Error(`Failed to ${endpoint} chatbot`)
+      }
+      
+      // Refetch all chatbots to get the updated state
+      await refetch()
     } catch (error) {
       console.error('Failed to toggle chatbot status:', error)
+      alert(`Failed to toggle chatbot status: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
